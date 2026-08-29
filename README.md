@@ -1,11 +1,12 @@
-# CLI v3.0 website update
+# Lumpiness Index v3.0 — website update
 
 Changes:
-- elevation profile uses adaptive y-axis scaling with a minimum 500 m vertical range;
-- wider left margin fixes clipped y-axis labels;
-- local lumpiness trace retained;
-- short/medium and long reversal markers retained;
-- adds collapsible Advanced: multi-scale lumpiness map heatmap;
-- CLI v3.0 mathematics unchanged.
+- working name changed to Lumpiness Index;
+- modern dark theme;
+- Figure 1 legend explains climb/descent reversal structure;
+- Figure 2 legend explains gradient roughness P(x) and P50;
+- Figure 3 multi-scale lumpiness map is now shown by default;
+- Figure 3 legend explains multi-scale analysis in cycling terms;
+- v3.0 mathematics unchanged.
 
-Replace the existing `index.html` in the GitHub Pages repository.
+Replace the repository-root `index.html` with this version.
