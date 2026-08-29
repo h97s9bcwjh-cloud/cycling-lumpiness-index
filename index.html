@@ -156,6 +156,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
     margin-bottom:2px;
   }
 
+  .ride-summary-date{grid-template-columns:1fr}
 </style>
   <meta name="description" content="Lumpiness Index (Cycling Lumpiness Index (CLI) v3.0): calculate how lumpy a cycling route is from a GPX elevation profile. Runs locally in your browser.">
   <meta name="theme-color" content="#17324d">
@@ -181,8 +182,13 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         <div class="hint">or drag and drop a GPX file here</div>
       </div>
       <div id="warn" class="warn"></div>
-<div class="stats">
+      <div class="stats profile-stats">
         <div class="stat"><div class="k">Distance</div><div class="v" id="distance">—</div></div>
+        <div class="stat"><div class="k">Elevation min</div><div class="v" id="emin">—</div></div>
+        <div class="stat"><div class="k">Elevation max</div><div class="v" id="emax">—</div></div>
+        <div class="stat"><div class="k">Elevation gain</div><div class="v" id="egain">—</div></div>
+      </div>
+<div class="stats">
       </div>
       <div class="profile-wrap">
         <div class="plot-title">
@@ -235,9 +241,8 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
 
       <div id="rideSummary" class="ride-summary" style="display:none">
         <div class="ride-summary-title" id="rideName">—</div>
-        <div class="ride-summary-row">
+        <div class="ride-summary-row ride-summary-date">
           <span><strong>Date</strong><br><span id="rideDate">—</span></span>
-          <span><strong>Distance</strong><br><span id="distance">—</span></span>
         </div>
       </div>
       <div class="score-card">
@@ -687,6 +692,9 @@ async function processFile(file){
     document.getElementById('category').textContent=label;
     document.getElementById('categoryCopy').textContent=copy;
     document.getElementById('distance').textContent=(total/1000).toFixed(1)+' km';
+    document.getElementById('emin').textContent=Math.round(Math.min(...z))+' m';
+    document.getElementById('emax').textContent=Math.round(Math.max(...z))+' m';
+    document.getElementById('egain').textContent=Math.round(elevationGain(z))+' m';
     document.getElementById('rideSummary').style.display='block';
     const marker=document.getElementById('cliMarker');
     marker.style.left=Math.max(0,Math.min(100,score*10))+'%';
