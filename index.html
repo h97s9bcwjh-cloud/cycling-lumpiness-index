@@ -217,6 +217,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         <p>Lumpiness Index v3.0 uses the route elevation profile resampled at 25 m intervals. It combines a multi-scale Haar-style wavelet measure of gradient roughness with meaningful climb↔descent reversal densities at 250–500 m and 2–4 km scales.</p>
         <p><strong>CLI = min(10, 0.53·P50 + 6.58·Rshort + 18.16·Rlong)</strong></p>
         <p>A ±2% neutral gradient band is used in the reversal analysis to avoid counting tiny fluctuations around flat.</p>
+        <p><strong>Reproducibility note:</strong> v3.0 uses exact 25 m spatial resampling and an exact n-point boxcar smoother for reversal detection, with zero-padding at route boundaries. These discrete rules reproduce the development implementation used to generate the frozen v3.0 scores.</p>
         <p>The graphics relate these terms back to the route: the teal <strong>P(x)</strong> trace shows local wavelet-derived gradient roughness along the ride; the dashed line is its median <strong>P50</strong>. Yellow dots mark short/medium climb↔descent reversals, while larger red dots mark long-scale reversals.</p>
       </details>
 
@@ -236,7 +237,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
   </div>
 
   <footer>
-    Candidate research/enthusiast metric. Whole-ride Lumpiness Index v3.0 was preliminarily validated on 24 blinded rides. GPX elevation quality can affect results, particularly where altitude data are sparse or noisy.
+    Candidate research/enthusiast metric. Canonical implementation: v3.0-development-compatible. Whole-ride Lumpiness Index v3.0 was preliminarily validated on 24 blinded rides. GPX elevation quality can affect results, particularly where altitude data are sparse or noisy.
   </footer>
 </div>
 
@@ -309,10 +310,21 @@ function median(arr){
   const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2;
 }
 function movingAverage(arr,n){
-  n=Math.max(1,Math.round(n)); const cs=meanPrefix(arr), out=new Array(arr.length).fill(0);
-  const h=Math.floor(n/2);
+  // Canonical v3.0 development operator:
+  // exact n-point boxcar smoothing with zero-padding at the route ends,
+  // equivalent to numpy.convolve(arr, ones(n)/n, mode='same').
+  n=Math.max(1,Math.round(n));
+  const out=new Array(arr.length).fill(0);
+  const left=Math.floor(n/2);
+  const right=n-left-1;
   for(let i=0;i<arr.length;i++){
-    const a=Math.max(0,i-h),b=Math.min(arr.length,i+h+1); out[i]=rangeMean(cs,a,b);
+    let sum=0;
+    for(let k=-left;k<=right;k++){
+      const j=i+k;
+      if(j>=0 && j<arr.length) sum+=arr[j];
+      // samples outside the recorded route contribute zero
+    }
+    out[i]=sum/n;
   }
   return out;
 }
@@ -580,10 +592,16 @@ function drawHeatmap(dist,fields,scales){
 async function processFile(file){
   warn.style.display='none'; warn.textContent='';
   try{
-    const text=await file.text(), pts=parseGPX(text), x=cumulativeDistance(pts), ele=pts.map(p=>p.ele);
+    const text=await file.text(), pts=parseGPX(text);
+    const xRaw=cumulativeDistance(pts), eleRaw=pts.map(p=>p.ele);
+    // Canonical v3.0 preprocessing: discard successive points separated by <=0.1 m.
+    const x=[xRaw[0]], ele=[eleRaw[0]];
+    for(let i=1;i<xRaw.length;i++){
+      if(xRaw[i]-x[x.length-1]>0.1){ x.push(xRaw[i]); ele.push(eleRaw[i]); }
+    }
     const total=x[x.length-1]; if(total<100) throw new Error('Route is too short for a meaningful whole-ride Lumpiness Index score.');
+    // Use complete 25 m intervals only; do not append a shorter final interval.
     const grid=[]; for(let d=0;d<=total;d+=25)grid.push(d);
-    if(grid[grid.length-1]<total)grid.push(total);
     const z=interp1(x,ele,grid);
     const result=cliFromProfile(z,25), score=result.cli;
     const [label,color,copy]=category(score);

@@ -1,12 +1,15 @@
-# Lumpiness Index v3.0 — website update
+# Lumpiness Index v3.0 — reproducibility fix
 
-Changes:
-- working name changed to Lumpiness Index;
-- modern dark theme;
-- Figure 1 legend explains climb/descent reversal structure;
-- Figure 2 legend explains gradient roughness P(x) and P50;
-- Figure 3 multi-scale lumpiness map is now shown by default;
-- Figure 3 legend explains multi-scale analysis in cycling terms;
-- v3.0 mathematics unchanged.
+This version restores the exact discrete implementation used during v3.0 development.
 
-Replace the repository-root `index.html` with this version.
+Key fixes:
+- reversal smoothing now uses an exact n-point boxcar with zero-padding, equivalent to
+  `numpy.convolve(arr, ones(n)/n, mode='same')`;
+- successive GPX points separated by <=0.1 m are discarded before interpolation;
+- the resampled route uses complete 25 m intervals only (no shorter appended final interval).
+
+These changes resolve the known discrepancies:
+- Rampos Inhumano: development 8.92, now reproduced by the website;
+- Tour of the Valleys: development 5.77, now reproduced by the website.
+
+The v3.0 mathematical architecture and fitted coefficients are unchanged.
