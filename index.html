@@ -54,7 +54,14 @@
   .dot-short{background:#d29b2b}.dot-long{background:#b23a3a}
   .line-swatch{width:18px;height:3px;background:#00828c;display:inline-block;border-radius:2px}
   .dash-swatch{width:18px;border-top:2px dashed #64748b;display:inline-block}
-  canvas{width:100%;height:320px;border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px solid var(--line)}
+  canvas{width:100%;height:320px;
+  }
+  details.advanced{margin-top:18px;border:1px solid #d8e1e8;border-radius:14px;background:#fff;overflow:hidden}
+  details.advanced summary{cursor:pointer;padding:14px 16px;font-weight:700;color:var(--navy);background:#f6f9fb}
+  details.advanced[open] summary{border-bottom:1px solid #e4ebf0}
+  .advanced-body{padding:14px 16px 16px}
+  #heatmap{height:320px;
+border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px solid var(--line)}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
   @media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
   .stat{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px}.stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.stat .v{font-size:20px;font-weight:700;margin-top:4px;color:var(--navy)}
@@ -93,7 +100,7 @@
       <div class="profile-wrap">
         <div class="plot-title">
           <strong>Elevation profile + CLI reversal structure</strong>
-          <span class="plot-note">Fixed elevation scale: 0–4,000 m</span>
+          <span class="plot-note">Adaptive elevation scale with a minimum 500 m vertical range</span>
         </div>
         <div class="legend">
           <span class="legend-item"><span class="dot dot-short"></span>Short/medium reversal (250–500 m)</span>
@@ -110,6 +117,14 @@
           <span class="legend-item"><span class="dash-swatch"></span>Median P50 used in CLI</span>
         </div>
         <canvas id="roughness" width="960" height="260"></canvas>
+
+        <details class="advanced">
+          <summary>Advanced: multi-scale lumpiness map</summary>
+          <div class="advanced-body">
+            <p class="plot-note" style="margin-top:0">This heatmap shows the weighted Haar-wavelet response at each distance and spatial scale. Brighter cells indicate stronger gradient variation at that scale. The scales used by CLI v3.0 run from 25 m to 4 km.</p>
+            <canvas id="heatmap" width="960" height="360"></canvas>
+          </div>
+        </details>
       </div>
       <div class="stats">
         <div class="stat"><div class="k">Distance</div><div class="v" id="distance">—</div></div>
@@ -328,7 +343,7 @@ function cliFromProfile(z, dx=25){
     return out;
   }
   return {
-    cli,P50,Rshort,Rlong,Pfull,
+    cli,P50,Rshort,Rlong,Pfull,fields,scales,
     shortPositions:mergePositions([...I250.positions,...I500.positions],250),
     longPositions:mergePositions([...I2000.positions,...I4000.positions],800)
   };
@@ -354,23 +369,33 @@ function elevationGain(z){
 
 function drawProfile(dist,ele,shortPositions=[],longPositions=[]){
   const c=document.getElementById('profile'),ctx=c.getContext('2d');
-  const W=c.width,H=c.height,pad={l:58,r:18,t:18,b:38};
+  const W=c.width,H=c.height,pad={l:76,r:22,t:18,b:42};
   ctx.clearRect(0,0,W,H);
-  const xmin=0,xmax=dist[dist.length-1]/1000, ymin=0, ymax=4000;
+  const xmin=0,xmax=dist[dist.length-1]/1000;
+
+  const dataMin=Math.min(...ele), dataMax=Math.max(...ele);
+  const centre=(dataMin+dataMax)/2;
+  const rawRange=Math.max(1,dataMax-dataMin);
+  const displayRange=Math.max(500,Math.ceil((rawRange*1.15)/100)*100);
+  let ymin=Math.floor((centre-displayRange/2)/100)*100;
+  let ymax=ymin+displayRange;
+  if(ymin<0){ ymax-=ymin; ymin=0; }
+
   const yr=ymax-ymin;
   const X=x=>pad.l+(x-xmin)/(xmax-xmin||1)*(W-pad.l-pad.r);
   const Y=y=>H-pad.b-(y-ymin)/yr*(H-pad.t-pad.b);
 
-  ctx.strokeStyle='#d5dee6';ctx.lineWidth=1;ctx.font='12px Arial';ctx.fillStyle='#64748b';
-  for(let k=0;k<=4;k++){
-    const y=ymin+yr*k/4,py=Y(y);
+  ctx.strokeStyle='#d5dee6';ctx.lineWidth=1;ctx.font='12px Arial';ctx.fillStyle='#64748b';ctx.textAlign='right';
+  for(let k=0;k<=5;k++){
+    const y=ymin+yr*k/5,py=Y(y);
     ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(W-pad.r,py);ctx.stroke();
-    ctx.fillText(Math.round(y)+' m',6,py+4);
+    ctx.fillText(Math.round(y)+' m',pad.l-10,py+4);
   }
+  ctx.textAlign='center';
   for(let k=0;k<=5;k++){
     const x=xmax*k/5,px=X(x);
     ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,H-pad.b);ctx.stroke();
-    ctx.fillText(x.toFixed(xmax<20?1:0)+' km',px-14,H-12);
+    ctx.fillText(x.toFixed(xmax<20?1:0)+' km',px,H-13);
   }
 
   const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
@@ -385,7 +410,6 @@ function drawProfile(dist,ele,shortPositions=[],longPositions=[]){
   for(let i=1;i<ele.length;i++)ctx.lineTo(X(dist[i]/1000),Y(ele[i]));
   ctx.strokeStyle='#1f4e79';ctx.lineWidth=2.4;ctx.stroke();
 
-  // Reversal markers are drawn at the elevation profile height at that distance.
   function elevationAt(m){
     const idx=Math.max(0,Math.min(ele.length-1,Math.round(m/25)));
     return ele[idx];
@@ -402,7 +426,7 @@ function drawProfile(dist,ele,shortPositions=[],longPositions=[]){
 
 function drawRoughness(dist,Pfull,P50){
   const c=document.getElementById('roughness'),ctx=c.getContext('2d');
-  const W=c.width,H=c.height,pad={l:58,r:18,t:18,b:38};
+  const W=c.width,H=c.height,pad={l:72,r:20,t:18,b:42};
   ctx.clearRect(0,0,W,H);
   const xmax=dist[dist.length-1]/1000;
   const vals=Pfull.filter(Number.isFinite);
@@ -448,6 +472,66 @@ function drawRoughness(dist,Pfull,P50){
   }
 }
 
+function drawHeatmap(dist,fields,scales){
+  const c=document.getElementById('heatmap'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,pad={l:76,r:22,t:18,b:42};
+  ctx.clearRect(0,0,W,H);
+  const xmax=dist[dist.length-1]/1000;
+  const plotW=W-pad.l-pad.r, plotH=H-pad.t-pad.b;
+  const rows=scales.length;
+
+  const finite=[];
+  for(const row of fields) for(const v of row) if(Number.isFinite(v)) finite.push(v);
+  const sorted=finite.sort((a,b)=>a-b);
+  const q95=sorted.length?sorted[Math.floor(0.95*(sorted.length-1))]:1;
+  const vmax=Math.max(1e-6,q95);
+
+  function heat(v){
+    if(!Number.isFinite(v)) return 'rgba(255,255,255,1)';
+    const t=Math.max(0,Math.min(1,v/vmax));
+    // blue-teal-yellow-red perceptual ramp
+    const stops=[
+      [0,[242,247,250]],[0.25,[160,207,210]],[0.5,[55,150,157]],[0.75,[232,170,58]],[1,[178,58,58]]
+    ];
+    let a=stops[0],b=stops[stops.length-1];
+    for(let i=1;i<stops.length;i++){if(t<=stops[i][0]){a=stops[i-1];b=stops[i];break;}}
+    const f=(t-a[0])/(b[0]-a[0]||1);
+    const rgb=a[1].map((x,i)=>Math.round(x+(b[1][i]-x)*f));
+    return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+  }
+
+  const n=dist.length;
+  for(let r=0;r<rows;r++){
+    const y=pad.t+r*plotH/rows;
+    const h=plotH/rows+0.5;
+    const row=fields[r];
+    for(let i=0;i<n;i++){
+      const x=pad.l+i*plotW/n;
+      const w=plotW/n+0.7;
+      ctx.fillStyle=heat(row[i]);
+      ctx.fillRect(x,y,w,h);
+    }
+  }
+
+  ctx.font='12px Arial';ctx.fillStyle='#64748b';ctx.textAlign='right';
+  for(let r=0;r<rows;r++){
+    const y=pad.t+(r+0.5)*plotH/rows+4;
+    const s=scales[r];
+    ctx.fillText(s>=1000?(s/1000)+' km':s+' m',pad.l-10,y);
+  }
+
+  ctx.textAlign='center';ctx.strokeStyle='#d5dee6';ctx.lineWidth=1;
+  for(let k=0;k<=5;k++){
+    const xkm=xmax*k/5,px=pad.l+k*plotW/5;
+    ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,H-pad.b);ctx.stroke();
+    ctx.fillText(xkm.toFixed(xmax<20?1:0)+' km',px,H-13);
+  }
+
+  ctx.fillStyle='#64748b';ctx.textAlign='left';
+  ctx.fillText('Low',pad.l,H-2);
+  ctx.textAlign='right';ctx.fillText('High relative response',W-pad.r,H-2);
+}
+
 async function processFile(file){
   warn.style.display='none'; warn.textContent='';
   try{
@@ -473,6 +557,7 @@ async function processFile(file){
     document.getElementById('rlong').textContent=result.Rlong.toFixed(3)+' /km';
     drawProfile(grid,z,result.shortPositions,result.longPositions);
     drawRoughness(grid,result.Pfull,result.P50);
+    drawHeatmap(grid,result.fields,result.scales);
     if(total<8000){
       warn.textContent='This route is shorter than ~8 km, so the full 2–4 km reversal bands have limited support. Treat the whole-ride CLI as scale-limited.';
       warn.style.display='block';
@@ -494,6 +579,9 @@ async function processFile(file){
   c=document.getElementById('roughness');ctx=c.getContext('2d');
   ctx.fillStyle='#64748b';ctx.font='15px Arial';ctx.textAlign='center';
   ctx.fillText('Local lumpiness trace will appear here',c.width/2,c.height/2);
+  c=document.getElementById('heatmap');ctx=c.getContext('2d');
+  ctx.fillStyle='#64748b';ctx.font='15px Arial';ctx.textAlign='center';
+  ctx.fillText('Multi-scale lumpiness map will appear here',c.width/2,c.height/2);
 })();
 </script>
 
