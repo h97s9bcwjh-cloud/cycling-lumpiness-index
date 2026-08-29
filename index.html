@@ -45,6 +45,15 @@
   .cli-category-strip{display:grid;grid-template-columns:1fr 2fr 2fr 2fr 2fr 1fr;margin-top:7px;font-size:10px;color:var(--muted);gap:2px}
   .cli-category-strip span{text-align:center}
   .profile-wrap{margin-top:18px}
+  .plot-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 7px}
+  .plot-title strong{color:var(--navy)}
+  .plot-note{font-size:12px;color:var(--muted)}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin:6px 0 10px}
+  .legend-item{display:flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .dot-short{background:#d29b2b}.dot-long{background:#b23a3a}
+  .line-swatch{width:18px;height:3px;background:#00828c;display:inline-block;border-radius:2px}
+  .dash-swatch{width:18px;border-top:2px dashed #64748b;display:inline-block}
   canvas{width:100%;height:320px;border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px solid var(--line)}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
   @media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
@@ -54,6 +63,7 @@
   summary{cursor:pointer;font-weight:700;color:var(--navy)}
   table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--navy)}
   .warn{margin-top:12px;padding:10px 12px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:14px;display:none}
+  #roughness{height:220px}
   footer{margin-top:20px;color:var(--muted);font-size:12px;line-height:1.5}
 </style>
   <meta name="description" content="Cycling Lumpiness Index (CLI v3.0): calculate how lumpy a cycling route is from a GPX elevation profile. Runs locally in your browser.">
@@ -81,7 +91,25 @@
       </div>
       <div id="warn" class="warn"></div>
       <div class="profile-wrap">
+        <div class="plot-title">
+          <strong>Elevation profile + CLI reversal structure</strong>
+          <span class="plot-note">Fixed elevation scale: 0–4,000 m</span>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="dot dot-short"></span>Short/medium reversal (250–500 m)</span>
+          <span class="legend-item"><span class="dot dot-long"></span>Long reversal (2–4 km)</span>
+        </div>
         <canvas id="profile" width="960" height="360"></canvas>
+
+        <div class="plot-title" style="margin-top:16px">
+          <strong>Local lumpiness trace P(x)</strong>
+          <span class="plot-note">Wavelet-derived gradient roughness along the route</span>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="line-swatch"></span>Local P(x)</span>
+          <span class="legend-item"><span class="dash-swatch"></span>Median P50 used in CLI</span>
+        </div>
+        <canvas id="roughness" width="960" height="260"></canvas>
       </div>
       <div class="stats">
         <div class="stat"><div class="k">Distance</div><div class="v" id="distance">—</div></div>
@@ -129,6 +157,7 @@
         <p>CLI v3.0 uses the route elevation profile resampled at 25 m intervals. It combines a multi-scale Haar-style wavelet measure of gradient roughness with meaningful climb↔descent reversal densities at 250–500 m and 2–4 km scales.</p>
         <p><strong>CLI = min(10, 0.53·P50 + 6.58·Rshort + 18.16·Rlong)</strong></p>
         <p>A ±2% neutral gradient band is used in the reversal analysis to avoid counting tiny fluctuations around flat.</p>
+        <p>The graphics relate these terms back to the route: the teal <strong>P(x)</strong> trace shows local wavelet-derived gradient roughness along the ride; the dashed line is its median <strong>P50</strong>. Yellow dots mark short/medium climb↔descent reversals, while larger red dots mark long-scale reversals.</p>
       </details>
 
       <details>
@@ -228,17 +257,28 @@ function movingAverage(arr,n){
   return out;
 }
 
-function reversalDensity(g, scaleM, lengthKm, dx=25){
+function reversalInfo(g, scaleM, lengthKm, dx=25){
   const n=Math.max(1,Math.round(scaleM/dx));
   const gs=movingAverage(g,n);
   let last=0,changes=0;
-  for(const v of gs){
+  const positions=[];
+  for(let i=0;i<gs.length;i++){
+    const v=gs[i];
     const s=v>=2?1:(v<=-2?-1:0);
     if(s===0) continue;
-    if(last!==0 && s!==last) changes++;
+    if(last!==0 && s!==last){
+      changes++;
+      positions.push(i*dx);
+    }
     last=s;
   }
-  return lengthKm>0 ? changes/lengthKm : 0;
+  return {
+    density:lengthKm>0 ? changes/lengthKm : 0,
+    positions
+  };
+}
+function reversalDensity(g, scaleM, lengthKm, dx=25){
+  return reversalInfo(g,scaleM,lengthKm,dx).density;
 }
 
 function cliFromProfile(z, dx=25){
@@ -254,6 +294,8 @@ function cliFromProfile(z, dx=25){
       fields[si][i]=w*Math.abs(right-left);
     }
   });
+
+  const Pfull=new Array(g.length).fill(NaN);
   const P=[];
   for(let i=0;i<g.length;i++){
     let m=NaN;
@@ -261,15 +303,35 @@ function cliFromProfile(z, dx=25){
       const v=fields[si][i];
       if(Number.isFinite(v)) m=Number.isFinite(m)?Math.max(m,v):v;
     }
+    Pfull[i]=m;
     if(Number.isFinite(m)) P.push(m);
   }
   const P50=median(P);
   const lengthKm=(z.length-1)*dx/1000;
-  const R250=reversalDensity(g,250,lengthKm,dx), R500=reversalDensity(g,500,lengthKm,dx);
-  const R2000=reversalDensity(g,2000,lengthKm,dx), R4000=reversalDensity(g,4000,lengthKm,dx);
-  const Rshort=(R250+R500)/2, Rlong=(R2000+R4000)/2;
+
+  const I250=reversalInfo(g,250,lengthKm,dx);
+  const I500=reversalInfo(g,500,lengthKm,dx);
+  const I2000=reversalInfo(g,2000,lengthKm,dx);
+  const I4000=reversalInfo(g,4000,lengthKm,dx);
+
+  const Rshort=(I250.density+I500.density)/2;
+  const Rlong=(I2000.density+I4000.density)/2;
   const cli=Math.min(10,Math.max(0,0.53*P50+6.58*Rshort+18.16*Rlong));
-  return {cli,P50,Rshort,Rlong};
+
+  // Merge nearby reversal markers from paired scales so the plot remains readable.
+  function mergePositions(arr,tol){
+    const a=[...arr].sort((x,y)=>x-y), out=[];
+    for(const x of a){
+      if(!out.length || x-out[out.length-1]>tol) out.push(x);
+      else out[out.length-1]=(out[out.length-1]+x)/2;
+    }
+    return out;
+  }
+  return {
+    cli,P50,Rshort,Rlong,Pfull,
+    shortPositions:mergePositions([...I250.positions,...I500.positions],250),
+    longPositions:mergePositions([...I2000.positions,...I4000.positions],800)
+  };
 }
 
 function category(score){
@@ -290,26 +352,100 @@ function elevationGain(z){
   return gain;
 }
 
-function drawProfile(dist,ele){
+function drawProfile(dist,ele,shortPositions=[],longPositions=[]){
   const c=document.getElementById('profile'),ctx=c.getContext('2d');
   const W=c.width,H=c.height,pad={l:58,r:18,t:18,b:38};
   ctx.clearRect(0,0,W,H);
-  const xmin=0,xmax=dist[dist.length-1]/1000, ymin=Math.min(...ele), ymax=Math.max(...ele);
-  const yr=(ymax-ymin)||1;
+  const xmin=0,xmax=dist[dist.length-1]/1000, ymin=0, ymax=4000;
+  const yr=ymax-ymin;
   const X=x=>pad.l+(x-xmin)/(xmax-xmin||1)*(W-pad.l-pad.r);
   const Y=y=>H-pad.b-(y-ymin)/yr*(H-pad.t-pad.b);
+
   ctx.strokeStyle='#d5dee6';ctx.lineWidth=1;ctx.font='12px Arial';ctx.fillStyle='#64748b';
   for(let k=0;k<=4;k++){
-    const y=ymin+yr*k/4,py=Y(y);ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(W-pad.r,py);ctx.stroke();ctx.fillText(Math.round(y)+' m',6,py+4);
+    const y=ymin+yr*k/4,py=Y(y);
+    ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(W-pad.r,py);ctx.stroke();
+    ctx.fillText(Math.round(y)+' m',6,py+4);
   }
   for(let k=0;k<=5;k++){
-    const x=xmax*k/5,px=X(x);ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,H-pad.b);ctx.stroke();ctx.fillText(x.toFixed(xmax<20?1:0)+' km',px-14,H-12);
+    const x=xmax*k/5,px=X(x);
+    ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,H-pad.b);ctx.stroke();
+    ctx.fillText(x.toFixed(xmax<20?1:0)+' km',px-14,H-12);
   }
-  const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);grad.addColorStop(0,'rgba(0,130,140,.38)');grad.addColorStop(1,'rgba(31,78,121,.06)');
+
+  const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grad.addColorStop(0,'rgba(0,130,140,.38)');
+  grad.addColorStop(1,'rgba(31,78,121,.06)');
   ctx.beginPath();ctx.moveTo(X(0),Y(ele[0]));
   for(let i=1;i<ele.length;i++)ctx.lineTo(X(dist[i]/1000),Y(ele[i]));
-  ctx.lineTo(X(xmax),H-pad.b);ctx.lineTo(X(0),H-pad.b);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-  ctx.beginPath();ctx.moveTo(X(0),Y(ele[0]));for(let i=1;i<ele.length;i++)ctx.lineTo(X(dist[i]/1000),Y(ele[i]));ctx.strokeStyle='#1f4e79';ctx.lineWidth=2.4;ctx.stroke();
+  ctx.lineTo(X(xmax),H-pad.b);ctx.lineTo(X(0),H-pad.b);ctx.closePath();
+  ctx.fillStyle=grad;ctx.fill();
+
+  ctx.beginPath();ctx.moveTo(X(0),Y(ele[0]));
+  for(let i=1;i<ele.length;i++)ctx.lineTo(X(dist[i]/1000),Y(ele[i]));
+  ctx.strokeStyle='#1f4e79';ctx.lineWidth=2.4;ctx.stroke();
+
+  // Reversal markers are drawn at the elevation profile height at that distance.
+  function elevationAt(m){
+    const idx=Math.max(0,Math.min(ele.length-1,Math.round(m/25)));
+    return ele[idx];
+  }
+  function marker(m,color,radius){
+    const px=X(m/1000), py=Y(elevationAt(m));
+    ctx.beginPath();ctx.arc(px,py,radius,0,Math.PI*2);
+    ctx.fillStyle=color;ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=1.5;ctx.stroke();
+  }
+  shortPositions.forEach(m=>marker(m,'#d29b2b',4));
+  longPositions.forEach(m=>marker(m,'#b23a3a',6));
+}
+
+function drawRoughness(dist,Pfull,P50){
+  const c=document.getElementById('roughness'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,pad={l:58,r:18,t:18,b:38};
+  ctx.clearRect(0,0,W,H);
+  const xmax=dist[dist.length-1]/1000;
+  const vals=Pfull.filter(Number.isFinite);
+  const dataMax=vals.length?Math.max(...vals):1;
+  // A stable, readable upper bound: 10 where possible, expanding only if required.
+  const ymax=Math.max(10,Math.ceil(dataMax/5)*5);
+  const X=x=>pad.l+(x/(xmax||1))*(W-pad.l-pad.r);
+  const Y=y=>H-pad.b-(y/ymax)*(H-pad.t-pad.b);
+
+  ctx.strokeStyle='#d5dee6';ctx.lineWidth=1;ctx.font='12px Arial';ctx.fillStyle='#64748b';
+  for(let k=0;k<=4;k++){
+    const y=ymax*k/4,py=Y(y);
+    ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(W-pad.r,py);ctx.stroke();
+    ctx.fillText(y.toFixed(ymax<=10?1:0),12,py+4);
+  }
+  for(let k=0;k<=5;k++){
+    const x=xmax*k/5,px=X(x);
+    ctx.beginPath();ctx.moveTo(px,pad.t);ctx.lineTo(px,H-pad.b);ctx.stroke();
+    ctx.fillText(x.toFixed(xmax<20?1:0)+' km',px-14,H-12);
+  }
+
+  const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grad.addColorStop(0,'rgba(0,130,140,.28)');
+  grad.addColorStop(1,'rgba(0,130,140,.03)');
+  let started=false;
+  ctx.beginPath();
+  for(let i=0;i<Pfull.length;i++){
+    const v=Pfull[i];
+    if(!Number.isFinite(v)) continue;
+    const px=X(dist[i]/1000),py=Y(v);
+    if(!started){ctx.moveTo(px,py);started=true;} else ctx.lineTo(px,py);
+  }
+  if(started){
+    ctx.strokeStyle='#00828c';ctx.lineWidth=2;ctx.stroke();
+  }
+
+  if(Number.isFinite(P50)){
+    const py=Y(P50);
+    ctx.setLineDash([7,5]);ctx.strokeStyle='#64748b';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(pad.l,py);ctx.lineTo(W-pad.r,py);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#64748b';ctx.fillText('P50 '+P50.toFixed(2),W-pad.r-72,py-6);
+  }
 }
 
 async function processFile(file){
@@ -335,7 +471,8 @@ async function processFile(file){
     document.getElementById('p50').textContent=result.P50.toFixed(3);
     document.getElementById('rshort').textContent=result.Rshort.toFixed(3)+' /km';
     document.getElementById('rlong').textContent=result.Rlong.toFixed(3)+' /km';
-    drawProfile(grid,z);
+    drawProfile(grid,z,result.shortPositions,result.longPositions);
+    drawRoughness(grid,result.Pfull,result.P50);
     if(total<8000){
       warn.textContent='This route is shorter than ~8 km, so the full 2–4 km reversal bands have limited support. Treat the whole-ride CLI as scale-limited.';
       warn.style.display='block';
@@ -350,7 +487,14 @@ async function processFile(file){
 }
 
 // initial empty chart
-(function(){ const c=document.getElementById('profile'),ctx=c.getContext('2d');ctx.fillStyle='#64748b';ctx.font='16px Arial';ctx.textAlign='center';ctx.fillText('Elevation profile will appear here',c.width/2,c.height/2);})();
+(function(){
+  let c=document.getElementById('profile'),ctx=c.getContext('2d');
+  ctx.fillStyle='#64748b';ctx.font='16px Arial';ctx.textAlign='center';
+  ctx.fillText('Elevation profile will appear here',c.width/2,c.height/2);
+  c=document.getElementById('roughness');ctx=c.getContext('2d');
+  ctx.fillStyle='#64748b';ctx.font='15px Arial';ctx.textAlign='center';
+  ctx.fillText('Local lumpiness trace will appear here',c.width/2,c.height/2);
+})();
 </script>
 
 <section class="card" id="about" style="margin-top:1.25rem">
