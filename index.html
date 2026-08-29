@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Lumpiness Index (Lumpiness Index v3.0)</title>
+<title>Lumpiness Index v3.0</title>
 <style>
   :root{
   --bg:#0b1220;
@@ -22,7 +22,7 @@
   header{margin-bottom:20px}
   h1{margin:0;color:var(--navy);font-size:clamp(28px,4vw,44px);letter-spacing:-.02em}
   .sub{margin-top:8px;color:var(--muted);font-size:16px;max-width:780px}
-  .grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px}
+  .grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(320px,.75fr);gap:18px}
   @media(max-width:850px){.grid{grid-template-columns:1fr}}
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(31,78,121,.07);padding:20px}
   .upload{border:2px dashed #b9c8d6;border-radius:14px;padding:28px;text-align:center;transition:.2s;background:#fbfdff}
@@ -69,7 +69,7 @@
   .advanced-body{padding:14px 16px 16px}
   #heatmap{height:320px;
 border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px solid var(--line)}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;margin-bottom:18px}
   @media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
   .stat{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px}.stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.stat .v{font-size:20px;font-weight:700;margin-top:4px;color:var(--navy)}
   .breakdown{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
@@ -115,7 +115,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
   <header>
     <h1>Lumpiness Index</h1>
     <div class="sub">
-      <strong>Lumpiness Index v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to capture repeated changes in gradient and the way a road alternates between climbing and descending, rather than simply how much elevation a ride gains. A long steady mountain climb can therefore have a low CLI, while a rolling route with repeated ramps, dips and short descents can score highly.<br><br>
+      <strong>Lumpiness Index v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to capture repeated changes in gradient and the way a road alternates between climbing and descending, rather than simply how much elevation a ride gains. A long steady mountain climb can therefore have a low LI, while a rolling route with repeated ramps, dips and short descents can score highly.<br><br>
       Upload a GPX file to calculate the frozen whole-ride Lumpiness Index v3.0 score and view the ride elevation profile. The calculation runs locally in your browser.
     </div>
   </header>
@@ -128,6 +128,12 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         <div class="hint">or drag and drop a GPX file here</div>
       </div>
       <div id="warn" class="warn"></div>
+      <div class="stats">
+        <div class="stat"><div class="k">Distance</div><div class="v" id="distance">—</div></div>
+        <div class="stat"><div class="k">Elevation min</div><div class="v" id="emin">—</div></div>
+        <div class="stat"><div class="k">Elevation max</div><div class="v" id="emax">—</div></div>
+        <div class="stat"><div class="k">Elevation gain</div><div class="v" id="egain">—</div></div>
+      </div>
       <div class="profile-wrap">
         <div class="plot-title">
           <strong>Figure 1. Elevation profile + reversal structure</strong>
@@ -150,7 +156,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         </div>
         <div class="legend">
           <span class="legend-item"><span class="line-swatch"></span>Local P(x)</span>
-          <span class="legend-item"><span class="dash-swatch"></span>Median P50 used in CLI</span>
+          <span class="legend-item"><span class="dash-swatch"></span>Median P50 used in LI</span>
         </div>
         <canvas id="roughness" width="960" height="260"></canvas>
         <div class="figure-caption">
@@ -171,12 +177,6 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
           The same road can be lumpy at very different physical scales. This map looks from very short features (tens of metres), through short rollers (hundreds of metres), to larger hills and valleys (kilometres). Horizontal position is distance along the ride; vertical position is the spatial scale being examined. Stronger colour means stronger gradient variation at that scale.
         </div>
       </div>
-      <div class="stats">
-        <div class="stat"><div class="k">Distance</div><div class="v" id="distance">—</div></div>
-        <div class="stat"><div class="k">Elevation min</div><div class="v" id="emin">—</div></div>
-        <div class="stat"><div class="k">Elevation max</div><div class="v" id="emax">—</div></div>
-        <div class="stat"><div class="k">Elevation gain</div><div class="v" id="egain">—</div></div>
-      </div>
     </section>
 
     <aside class="card">
@@ -191,7 +191,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
           </div>
         </div>
 
-        <div class="cli-scale-wrap" aria-label="CLI 0 to 10 scale">
+        <div class="cli-scale-wrap" aria-label="LI 0 to 10 scale">
           <div class="cli-scale">
             <div class="cli-marker" id="cliMarker" style="left:0%;display:none"></div>
           </div>
@@ -213,9 +213,9 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
       </div>
 
       <details>
-        <summary>How is CLI calculated?</summary>
+        <summary>How is LI calculated?</summary>
         <p>Lumpiness Index v3.0 uses the route elevation profile resampled at 25 m intervals. It combines a multi-scale Haar-style wavelet measure of gradient roughness with meaningful climb↔descent reversal densities at 250–500 m and 2–4 km scales.</p>
-        <p><strong>CLI = min(10, 0.53·P50 + 6.58·Rshort + 18.16·Rlong)</strong></p>
+        <p><strong>LI = min(10, 0.53·P50 + 6.58·Rshort + 18.16·Rlong)</strong></p>
         <p>A ±2% neutral gradient band is used in the reversal analysis to avoid counting tiny fluctuations around flat.</p>
         <p><strong>Reproducibility note:</strong> v3.0 uses exact 25 m spatial resampling and an exact n-point boxcar smoother for reversal detection, with zero-padding at route boundaries. These discrete rules reproduce the development implementation used to generate the frozen v3.0 scores.</p>
         <p>The graphics relate these terms back to the route: the teal <strong>P(x)</strong> trace shows local wavelet-derived gradient roughness along the ride; the dashed line is its median <strong>P50</strong>. Yellow dots mark short/medium climb↔descent reversals, while larger red dots mark long-scale reversals.</p>
@@ -650,9 +650,9 @@ async function processFile(file){
 
 <section class="card" id="about" style="margin-top:1.25rem">
   <h2>About the Lumpiness Index</h2>
-  <p><strong>Lumpiness Index v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to distinguish repeated changes in gradient and climbing/descending structure from simple elevation gain or steepness. A long steady climb can therefore have a low CLI, while a rolling sawtooth route can score highly.</p>
+  <p><strong>Lumpiness Index v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to distinguish repeated changes in gradient and climbing/descending structure from simple elevation gain or steepness. A long steady climb can therefore have a low LI, while a rolling sawtooth route can score highly.</p>
   <p>The calculation combines multi-scale gradient roughness with short/medium (roughly 250–500 m) and longer (roughly 2–4 km) climb–descent reversal structure. The current whole-ride formula was frozen before two blinded validation batches totalling 24 rides; against one experienced rider’s subjective ratings it achieved a mean absolute error of 0.73/10 and Spearman rank correlation of 0.941.</p>
-  <p><strong>Ride summary:</strong> distance, minimum/maximum elevation and total elevation gain are calculated from the same distance-normalised elevation profile used by CLI. Elevation gain is the sum of positive elevation changes after 25 m spatial resampling.</p>
+  <p><strong>Ride summary:</strong> distance, minimum/maximum elevation and total elevation gain are calculated from the same distance-normalised elevation profile used by LI. Elevation gain is the sum of positive elevation changes after 25 m spatial resampling.</p>
   <p><strong>Privacy:</strong> GPX processing takes place in your browser. The calculator does not need to send the ride file to a server.</p>
   <details>
     <summary><strong>Lumpiness Index categories</strong></summary>
