@@ -24,10 +24,26 @@
   .btn{display:inline-block;background:var(--navy);color:#fff;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;border:none}
   .btn:hover{filter:brightness(1.07)}
   .hint{color:var(--muted);font-size:13px;margin-top:8px}
-  .score-card{display:flex;gap:18px;align-items:center;min-height:160px}
-  .score-badge{width:132px;height:132px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-weight:700;box-shadow:inset 0 0 0 8px rgba(255,255,255,.2)}
-  .score-num{font-size:43px;line-height:1}.score-den{font-size:14px;opacity:.9;margin-top:4px}
-  .score-label{font-size:24px;font-weight:700;margin-bottom:6px}.score-copy{color:var(--muted);line-height:1.45}
+  .score-card{min-height:160px}
+  .score-top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}
+  .score-value{display:flex;align-items:baseline;gap:5px}
+  .score-num{font-size:54px;line-height:.95;font-weight:800;color:var(--navy);letter-spacing:-.04em}
+  .score-den{font-size:16px;color:var(--muted);font-weight:700}
+  .score-label{font-size:24px;font-weight:700;margin-bottom:4px}
+  .score-copy{color:var(--muted);line-height:1.45}
+  .cli-scale-wrap{margin-top:14px}
+  .cli-scale{position:relative;height:22px;border-radius:999px;background:linear-gradient(90deg,
+    #64748b 0%, #64748b 10%,
+    #2f855a 10%, #2f855a 30%,
+    #84a93d 30%, #84a93d 50%,
+    #d29b2b 50%, #d29b2b 70%,
+    #d46b2c 70%, #d46b2c 90%,
+    #b23a3a 90%, #b23a3a 100%);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .cli-marker{position:absolute;top:-8px;width:4px;height:38px;background:#111827;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 3px rgba(255,255,255,.85)}
+  .cli-scale-labels{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:7px}
+  .cli-category-strip{display:grid;grid-template-columns:1fr 2fr 2fr 2fr 2fr 1fr;margin-top:7px;font-size:10px;color:var(--muted);gap:2px}
+  .cli-category-strip span{text-align:center}
   .profile-wrap{margin-top:18px}
   canvas{width:100%;height:320px;border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px solid var(--line)}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
@@ -50,7 +66,10 @@
 <div class="wrap">
   <header>
     <h1>Cycling Lumpiness Index</h1>
-    <div class="sub">Upload a GPX file to calculate the frozen <strong>CLI v3.0</strong> whole-ride lumpiness score and view the ride elevation profile. Everything runs locally in your browser.</div>
+    <div class="sub">
+      <strong>CLI v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to capture repeated changes in gradient and the way a road alternates between climbing and descending, rather than simply how much elevation a ride gains. A long steady mountain climb can therefore have a low CLI, while a rolling route with repeated ramps, dips and short descents can score highly.<br><br>
+      Upload a GPX file to calculate the frozen whole-ride CLI v3.0 score and view the ride elevation profile. The calculation runs locally in your browser.
+    </div>
   </header>
 
   <div class="grid">
@@ -68,18 +87,30 @@
         <div class="stat"><div class="k">Distance</div><div class="v" id="distance">—</div></div>
         <div class="stat"><div class="k">Elevation min</div><div class="v" id="emin">—</div></div>
         <div class="stat"><div class="k">Elevation max</div><div class="v" id="emax">—</div></div>
-        <div class="stat"><div class="k">Track points</div><div class="v" id="points">—</div></div>
+        <div class="stat"><div class="k">Elevation gain</div><div class="v" id="egain">—</div></div>
       </div>
     </section>
 
     <aside class="card">
       <div class="score-card">
-        <div class="score-badge" id="scoreBadge" style="background:#94a3b8">
-          <div class="score-num" id="score">—</div><div class="score-den">/ 10</div>
+        <div class="score-top">
+          <div>
+            <div class="score-label" id="category">Upload a ride</div>
+            <div class="score-copy" id="categoryCopy">CLI measures how much the road gradient changes and how strongly the route alternates between climbing and descending.</div>
+          </div>
+          <div class="score-value">
+            <div class="score-num" id="score">—</div><div class="score-den">/ 10</div>
+          </div>
         </div>
-        <div>
-          <div class="score-label" id="category">Upload a ride</div>
-          <div class="score-copy" id="categoryCopy">CLI measures how much the road gradient changes and how strongly the route alternates between climbing and descending.</div>
+
+        <div class="cli-scale-wrap" aria-label="CLI 0 to 10 scale">
+          <div class="cli-scale">
+            <div class="cli-marker" id="cliMarker" style="left:0%;display:none"></div>
+          </div>
+          <div class="cli-scale-labels"><span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span></div>
+          <div class="cli-category-strip">
+            <span>Not lumpy</span><span>Slightly</span><span>Moderately</span><span>Lumpy</span><span>Very lumpy</span><span>Extreme</span>
+          </div>
         </div>
       </div>
 
@@ -250,6 +281,15 @@ function category(score){
   return ['Extremely lumpy','#b23a3a','Exceptional sawtooth-style terrain.'];
 }
 
+function elevationGain(z){
+  let gain=0;
+  for(let i=1;i<z.length;i++){
+    const dz=z[i]-z[i-1];
+    if(dz>0) gain+=dz;
+  }
+  return gain;
+}
+
 function drawProfile(dist,ele){
   const c=document.getElementById('profile'),ctx=c.getContext('2d');
   const W=c.width,H=c.height,pad={l:58,r:18,t:18,b:38};
@@ -283,13 +323,15 @@ async function processFile(file){
     const result=cliFromProfile(z,25), score=result.cli;
     const [label,color,copy]=category(score);
     document.getElementById('score').textContent=score.toFixed(2);
-    document.getElementById('scoreBadge').style.background=color;
     document.getElementById('category').textContent=label;
     document.getElementById('categoryCopy').textContent=copy;
     document.getElementById('distance').textContent=(total/1000).toFixed(1)+' km';
-    document.getElementById('emin').textContent=Math.round(Math.min(...ele))+' m';
-    document.getElementById('emax').textContent=Math.round(Math.max(...ele))+' m';
-    document.getElementById('points').textContent=pts.length.toLocaleString();
+    document.getElementById('emin').textContent=Math.round(Math.min(...z))+' m';
+    document.getElementById('emax').textContent=Math.round(Math.max(...z))+' m';
+    document.getElementById('egain').textContent=Math.round(elevationGain(z))+' m';
+    const marker=document.getElementById('cliMarker');
+    marker.style.left=Math.max(0,Math.min(100,score*10))+'%';
+    marker.style.display='block';
     document.getElementById('p50').textContent=result.P50.toFixed(3);
     document.getElementById('rshort').textContent=result.Rshort.toFixed(3)+' /km';
     document.getElementById('rlong').textContent=result.Rlong.toFixed(3)+' /km';
@@ -314,7 +356,8 @@ async function processFile(file){
 <section class="card" id="about" style="margin-top:1.25rem">
   <h2>About the Cycling Lumpiness Index</h2>
   <p><strong>CLI v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to distinguish repeated changes in gradient and climbing/descending structure from simple elevation gain or steepness. A long steady climb can therefore have a low CLI, while a rolling sawtooth route can score highly.</p>
-  <p>The calculation combines multi-scale gradient roughness with short/medium (roughly 250–500 m) and longer (roughly 2–4 km) climb–descent reversal structure. The current whole-ride formula was frozen before two blinded validation batches totalling 24 rides; against one experienced rider’s subjective ratings it achieved a mean absolute error of 0.69/10 and Spearman rank correlation of 0.932.</p>
+  <p>The calculation combines multi-scale gradient roughness with short/medium (roughly 250–500 m) and longer (roughly 2–4 km) climb–descent reversal structure. The current whole-ride formula was frozen before two blinded validation batches totalling 24 rides; against one experienced rider’s subjective ratings it achieved a mean absolute error of 0.73/10 and Spearman rank correlation of 0.941.</p>
+  <p><strong>Ride summary:</strong> distance, minimum/maximum elevation and total elevation gain are calculated from the same distance-normalised elevation profile used by CLI. Elevation gain is the sum of positive elevation changes after 25 m spatial resampling.</p>
   <p><strong>Privacy:</strong> GPX processing takes place in your browser. The calculator does not need to send the ride file to a server.</p>
   <details>
     <summary><strong>CLI categories</strong></summary>
