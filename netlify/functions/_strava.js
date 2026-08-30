@@ -2,7 +2,7 @@ const crypto=require('crypto');
 
 const SESSION_COOKIE='cli_strava_session';
 const STATE_COOKIE='cli_strava_state';
-const API_BASE='https://api-v3.strava.com';
+const API_BASES=['https://www.strava.com/api/v3','https://api-v3.strava.com'];
 
 function baseUrl(){
   return (process.env.URL||process.env.DEPLOY_PRIME_URL||'').replace(/\/$/,'');
@@ -73,12 +73,24 @@ async function freshSession(event){
   return {session:s,setCookie:sessionCookie(s)};
 }
 async function stravaGet(path,accessToken){
-  const r=await fetch(API_BASE+path,{headers:{authorization:`Bearer ${accessToken}`}});
-  const data=await r.json();
-  if(!r.ok) throw new Error(data.message||`Strava API request failed (${r.status})`);
-  return data;
+  let lastError=null;
+  for(const base of API_BASES){
+    try{
+      const r=await fetch(base+path,{headers:{authorization:`Bearer ${accessToken}`}});
+      let data={};
+      try{data=await r.json();}catch(_){}
+      if(!r.ok) throw new Error(data.message||`Strava API request failed (${r.status})`);
+      return data;
+    }catch(err){
+      lastError=err;
+      const msg=String(err?.message||err);
+      if(msg.startsWith('Strava API request failed')) throw err;
+      if(msg!=='fetch failed' && !/fetch/i.test(msg)) throw err;
+    }
+  }
+  throw lastError||new Error('Unable to reach Strava API');
 }
 module.exports={
-  crypto,SESSION_COOKIE,STATE_COOKIE,API_BASE,baseUrl,callbackUrl,parseCookies,
+  crypto,SESSION_COOKIE,STATE_COOKIE,API_BASES,baseUrl,callbackUrl,parseCookies,
   sessionCookie,clearSessionCookie,json,requireConfig,tokenRequest,getSession,freshSession,stravaGet
 };

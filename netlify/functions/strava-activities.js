@@ -11,5 +11,5 @@ exports.handler=async(event)=>{
       type:a.type,sport_type:a.sport_type,total_elevation_gain:a.total_elevation_gain
     }));
     return json(200,{activities},setCookie?{'set-cookie':setCookie}:{});
-  }catch(err){return json(500,{error:err.message});}
+  }catch(err){return json(500,{error:err.message,stage:'strava_api_request'});}
 };

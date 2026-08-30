@@ -1308,13 +1308,9 @@ document.getElementById('compareFileB').addEventListener('change',e=>{
 
 window.addEventListener('DOMContentLoaded', async () => {
   const qs = new URLSearchParams(window.location.search);
-
-  // The OAuth callback returns with ?strava=connected. The secure session
-  // cookie is already set server-side; this only cleans up the address bar.
   if (qs.get('strava') === 'connected' || qs.get('strava') === 'denied') {
     history.replaceState({}, '', window.location.pathname);
   }
-
   await refreshStravaStatus(true);
 });
 
