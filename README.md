@@ -53,3 +53,11 @@ Configure the three environment variables locally before authenticating with Str
 
 The non-Strava GPX-only version can remain on GitHub Pages. To make Strava authentication work reliably,
 deploy this Strava-enabled build to Netlify (or another host with same-origin serverless functions).
+
+
+## Beta and intellectual-property notice
+
+The public site identifies CLI v3.0 as a beta/research metric and uses the anonymous notice:
+`© 2026 Cycling Lumpiness Index. All rights reserved.`
+
+No personal name is displayed on the site.
