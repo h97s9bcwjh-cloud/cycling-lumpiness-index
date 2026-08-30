@@ -1305,6 +1305,19 @@ document.getElementById('compareFileB').addEventListener('change',e=>{
   ctx.fillStyle='#94a3b8';ctx.font='15px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif';ctx.textAlign='center';
   ctx.fillText('Multi-scale lumpiness map will appear here',c.width/2,c.height/2);
 })();
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const qs = new URLSearchParams(window.location.search);
+
+  // The OAuth callback returns with ?strava=connected. The secure session
+  // cookie is already set server-side; this only cleans up the address bar.
+  if (qs.get('strava') === 'connected' || qs.get('strava') === 'denied') {
+    history.replaceState({}, '', window.location.pathname);
+  }
+
+  await refreshStravaStatus(true);
+});
+
 </script>
 
 <section class="card" id="about" style="margin-top:1.25rem">
