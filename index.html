@@ -278,6 +278,23 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
     .compare-upload-grid,.compare-results{grid-template-columns:1fr}
   }
 
+
+  .source-divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:12px}
+  .source-divider:before,.source-divider:after{content:"";height:1px;background:var(--border);flex:1}
+  .strava-box{padding:14px;border:1px solid var(--border);background:var(--panel2);border-radius:12px;margin-top:10px}
+  .strava-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .strava-title{font-weight:750}
+  .strava-status{font-size:12px;color:var(--muted)}
+  .strava-btn{display:inline-flex;align-items:center;gap:8px;background:#fc4c02;color:white;border:0;border-radius:9px;padding:9px 12px;font:inherit;font-weight:750;cursor:pointer;text-decoration:none}
+  .strava-btn.secondary{background:#26364d;color:var(--text)}
+  .strava-controls{display:none;margin-top:12px}
+  .strava-controls.active{display:block}
+  .strava-select{width:100%;margin:8px 0;padding:10px 11px;border-radius:9px;border:1px solid var(--border);background:#0d1524;color:var(--text);font:inherit}
+  .strava-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .strava-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:8px}
+  .compare-strava-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  @media(max-width:700px){.compare-strava-grid{grid-template-columns:1fr}}
+
 </style>
   <meta name="description" content="Lumpiness Index (Cycling Lumpiness Index (CLI) v3.0): calculate how lumpy a cycling route is from a GPX elevation profile. Runs locally in your browser.">
   <meta name="theme-color" content="#17324d">
@@ -308,6 +325,27 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         <label class="btn" for="fileInput">Choose GPX file</label>
         <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml,application/xml" />
         <div class="hint">or drag and drop a GPX file here</div>
+      </div>
+      <div class="source-divider">or</div>
+      <div class="strava-box" id="stravaSingleBox">
+        <div class="strava-head">
+          <div>
+            <div class="strava-title">Import from Strava</div>
+            <div class="strava-status" id="stravaStatusText">Not connected</div>
+          </div>
+          <a class="strava-btn" id="stravaConnectBtn" href="/.netlify/functions/strava-auth">Connect with Strava</a>
+        </div>
+        <div class="strava-controls" id="stravaControls">
+          <select class="strava-select" id="stravaActivitySelect">
+            <option value="">Choose a recent cycling activity…</option>
+          </select>
+          <div class="strava-actions">
+            <button class="strava-btn" type="button" id="stravaLoadBtn">Calculate CLI</button>
+            <button class="strava-btn secondary" type="button" id="stravaRefreshBtn">Refresh rides</button>
+            <button class="strava-btn secondary" type="button" id="stravaDisconnectBtn">Disconnect</button>
+          </div>
+          <div class="strava-note">The selected activity’s distance and altitude streams are used to construct the same 25 m elevation profile used by CLI. Strava-derived elevation may differ slightly from an exported GPX.</div>
+        </div>
       </div>
       <div id="warn" class="warn"></div>
       <div class="stats profile-stats">
@@ -452,6 +490,25 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         </div>
         <div id="compareWarnB" class="warn"></div>
       </section>
+    </div>
+
+    <div class="strava-box" id="compareStravaBox">
+      <div class="strava-head">
+        <div>
+          <div class="strava-title">Use Strava rides for comparison</div>
+          <div class="strava-status" id="compareStravaStatus">Connect once, then choose Ride A and/or Ride B from your recent activities.</div>
+        </div>
+      </div>
+      <div class="compare-strava-grid">
+        <div>
+          <select class="strava-select" id="stravaCompareA"><option value="">Strava ride for A…</option></select>
+          <button class="strava-btn secondary" id="stravaUseA" type="button">Use as Ride A</button>
+        </div>
+        <div>
+          <select class="strava-select" id="stravaCompareB"><option value="">Strava ride for B…</option></select>
+          <button class="strava-btn secondary" id="stravaUseB" type="button">Use as Ride B</button>
+        </div>
+      </div>
     </div>
 
     <div id="compareAxisNote" class="contrib-note" style="display:none;margin:4px 0 10px">
@@ -920,43 +977,49 @@ async function analyseGPXFile(file){
   };
 }
 
+
+function renderSingleAnalysis(a){
+  const score=a.result.cli;
+  const [label,color,copy]=category(score);
+
+  document.getElementById('rideName').textContent=a.fileName;
+  document.getElementById('rideDate').textContent=a.date;
+  document.getElementById('score').textContent=score.toFixed(2);
+  document.getElementById('category').textContent=label;
+  document.getElementById('categoryCopy').textContent=copy;
+  document.getElementById('distance').textContent=(a.total/1000).toFixed(1)+' km';
+  document.getElementById('emin').textContent=Math.round(Math.min(...a.z))+' m';
+  document.getElementById('emax').textContent=Math.round(Math.max(...a.z))+' m';
+  document.getElementById('egain').textContent=Math.round(a.elevationGain)+' m';
+  document.getElementById('rideSummary').style.display='block';
+
+  const marker=document.getElementById('cliMarker');
+  marker.style.left=Math.max(0,Math.min(100,score*10))+'%';
+  marker.style.display='block';
+
+  document.getElementById('p50').textContent=a.result.P50.toFixed(3);
+  document.getElementById('rshort').textContent=a.result.Rshort.toFixed(3)+' /km';
+  document.getElementById('rlong').textContent=a.result.Rlong.toFixed(3)+' /km';
+
+  drawProfile(a.grid,a.z,a.result.shortPositions,a.result.longPositions);
+  drawRoughness(a.grid,a.result.Pfull,a.result.P50);
+  drawHeatmap(a.grid,a.result.fields,a.result.scales);
+
+  warn.style.display='none';
+  if(a.total<8000){
+    warn.textContent='This route is shorter than ~8 km, so the full 2–4 km reversal bands have limited support. Treat the whole-ride CLI as scale-limited.';
+    warn.style.display='block';
+  }else if(a.maxGap>300){
+    warn.textContent='Data-quality note: the source elevation trace contains a sampling gap greater than 300 m. Sparse elevation sampling may affect the result.';
+    warn.style.display='block';
+  }
+}
+
 async function processFile(file){
-  warn.style.display='none'; warn.textContent='';
+  warn.style.display='none';warn.textContent='';
   try{
     const a=await analyseGPXFile(file);
-    const score=a.result.cli;
-    const [label,color,copy]=category(score);
-
-    document.getElementById('rideName').textContent=a.fileName;
-    document.getElementById('rideDate').textContent=a.date;
-    document.getElementById('score').textContent=score.toFixed(2);
-    document.getElementById('category').textContent=label;
-    document.getElementById('categoryCopy').textContent=copy;
-    document.getElementById('distance').textContent=(a.total/1000).toFixed(1)+' km';
-    document.getElementById('emin').textContent=Math.round(Math.min(...a.z))+' m';
-    document.getElementById('emax').textContent=Math.round(Math.max(...a.z))+' m';
-    document.getElementById('egain').textContent=Math.round(a.elevationGain)+' m';
-    document.getElementById('rideSummary').style.display='block';
-
-    const marker=document.getElementById('cliMarker');
-    marker.style.left=Math.max(0,Math.min(100,score*10))+'%';
-    marker.style.display='block';
-
-    document.getElementById('p50').textContent=a.result.P50.toFixed(3);
-    document.getElementById('rshort').textContent=a.result.Rshort.toFixed(3)+' /km';
-    document.getElementById('rlong').textContent=a.result.Rlong.toFixed(3)+' /km';
-
-    drawProfile(a.grid,a.z,a.result.shortPositions,a.result.longPositions);
-    drawRoughness(a.grid,a.result.Pfull,a.result.P50);
-    drawHeatmap(a.grid,a.result.fields,a.result.scales);
-
-    if(a.total<8000){
-      warn.textContent='This route is shorter than ~8 km, so the full 2–4 km reversal bands have limited support. Treat the whole-ride CLI as scale-limited.';
-      warn.style.display='block';
-    } else if(a.maxGap>300){
-      warn.textContent='Data-quality note: this GPX contains a track-point gap greater than 300 m. Sparse elevation sampling may affect the result.';
-      warn.style.display='block';
-    }
+    renderSingleAnalysis(a);
   }catch(err){
     warn.textContent=err.message||String(err);warn.style.display='block';
   }
@@ -993,6 +1056,147 @@ function drawMiniProfile(canvasId,dist,ele,sharedXmax=null){
   ctx.beginPath();ctx.moveTo(X(0),Y(ele[0]));
   for(let i=1;i<ele.length;i++)ctx.lineTo(X(dist[i]/1000),Y(ele[i]));
   ctx.strokeStyle='#7dd3fc';ctx.lineWidth=2;ctx.stroke();
+}
+
+
+let stravaActivities=[];
+let stravaConnected=false;
+
+function cyclingActivity(a){
+  const t=(a.sport_type||a.type||'').toLowerCase();
+  return ['ride','virtualride','ebikeride','mountainbikeride','gravelride'].includes(t);
+}
+
+function activityLabel(a){
+  const d=a.start_date_local ? a.start_date_local.slice(0,10) : '';
+  const km=Number.isFinite(a.distance)?(a.distance/1000).toFixed(1)+' km':'';
+  return [d,a.name,km].filter(Boolean).join(' · ');
+}
+
+function populateStravaSelect(select,placeholder){
+  const current=select.value;
+  select.innerHTML='';
+  const o=document.createElement('option');
+  o.value='';o.textContent=placeholder;select.appendChild(o);
+  for(const a of stravaActivities){
+    const opt=document.createElement('option');
+    opt.value=String(a.id);
+    opt.textContent=activityLabel(a);
+    select.appendChild(opt);
+  }
+  if([...select.options].some(x=>x.value===current)) select.value=current;
+}
+
+async function apiJSON(url,opts={}){
+  const r=await fetch(url,{credentials:'same-origin',...opts});
+  let data={};
+  try{data=await r.json();}catch(_){}
+  if(!r.ok) throw new Error(data.error||data.message||`Request failed (${r.status})`);
+  return data;
+}
+
+async function refreshStravaStatus(loadActivities=true){
+  try{
+    const s=await apiJSON('/.netlify/functions/strava-status');
+    stravaConnected=!!s.connected;
+    document.getElementById('stravaStatusText').textContent=s.connected
+      ? `Connected${s.athlete_name?' as '+s.athlete_name:''}`
+      : 'Not connected';
+    document.getElementById('stravaConnectBtn').style.display=s.connected?'none':'inline-flex';
+    document.getElementById('stravaControls').classList.toggle('active',s.connected);
+    document.getElementById('compareStravaStatus').textContent=s.connected
+      ? 'Connected to Strava — choose either ride below.'
+      : 'Connect to Strava in Single ride mode first, then choose rides here.';
+    if(s.connected && loadActivities) await loadStravaActivities();
+  }catch(err){
+    document.getElementById('stravaStatusText').textContent='Strava connection unavailable';
+  }
+}
+
+async function loadStravaActivities(){
+  const data=await apiJSON('/.netlify/functions/strava-activities');
+  stravaActivities=(data.activities||[]).filter(cyclingActivity);
+  populateStravaSelect(document.getElementById('stravaActivitySelect'),'Choose a recent cycling activity…');
+  populateStravaSelect(document.getElementById('stravaCompareA'),'Strava ride for A…');
+  populateStravaSelect(document.getElementById('stravaCompareB'),'Strava ride for B…');
+}
+
+function formatActivityDate(activity){
+  if(!activity.start_date_local) return 'Not available';
+  const s=activity.start_date_local.slice(0,10);
+  const [y,m,d]=s.split('-').map(Number);
+  if(!y||!m||!d) return s;
+  return new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric'}).format(new Date(y,m-1,d));
+}
+
+async function analyseStravaActivity(activity){
+  const payload=await apiJSON('/.netlify/functions/strava-streams?activity_id='+encodeURIComponent(activity.id));
+  const xRaw=payload.distance||[], eleRaw=payload.altitude||[];
+  if(xRaw.length<3 || eleRaw.length<3 || xRaw.length!==eleRaw.length){
+    throw new Error('Strava did not return a usable distance/elevation stream for this activity.');
+  }
+
+  const x=[xRaw[0]],ele=[eleRaw[0]];
+  for(let i=1;i<xRaw.length;i++){
+    const xd=Number(xRaw[i]),zd=Number(eleRaw[i]);
+    if(Number.isFinite(xd)&&Number.isFinite(zd)&&xd-x[x.length-1]>0.1){
+      x.push(xd);ele.push(zd);
+    }
+  }
+  const offset=x[0]||0;
+  for(let i=0;i<x.length;i++) x[i]-=offset;
+  const total=x[x.length-1];
+  if(total<100) throw new Error('This Strava activity is too short for a meaningful whole-ride CLI score.');
+
+  const grid=[];for(let d=0;d<=total;d+=25)grid.push(d);
+  const z=interp1(x,ele,grid);
+  const result=cliFromProfile(z,25);
+
+  return {
+    fileName:activity.name||`Strava activity ${activity.id}`,
+    date:formatActivityDate(activity),
+    total,grid,z,result,
+    elevationGain:elevationGain(z),
+    maxGap:Math.max(...x.slice(1).map((v,i)=>v-x[i])),
+    source:'Strava'
+  };
+}
+
+async function loadSingleFromStrava(){
+  const id=document.getElementById('stravaActivitySelect').value;
+  if(!id) return;
+  const activity=stravaActivities.find(a=>String(a.id)===id);
+  if(!activity) return;
+  warn.style.display='none';
+  try{
+    const a=await analyseStravaActivity(activity);
+    renderSingleAnalysis(a);
+  }catch(err){
+    warn.textContent=err.message||String(err);warn.style.display='block';
+  }
+}
+
+document.getElementById('stravaLoadBtn').addEventListener('click',loadSingleFromStrava);
+document.getElementById('stravaRefreshBtn').addEventListener('click',()=>loadStravaActivities().catch(err=>alert(err.message)));
+document.getElementById('stravaDisconnectBtn').addEventListener('click',async()=>{
+  try{await apiJSON('/.netlify/functions/strava-disconnect',{method:'POST'});}catch(_){}
+  stravaActivities=[];await refreshStravaStatus(false);
+});
+document.getElementById('stravaUseA').addEventListener('click',()=>loadCompareStrava('A'));
+document.getElementById('stravaUseB').addEventListener('click',()=>loadCompareStrava('B'));
+
+async function loadCompareStrava(key){
+  const sel=document.getElementById('stravaCompare'+key);
+  const activity=stravaActivities.find(a=>String(a.id)===sel.value);
+  if(!activity) return;
+  const warnEl=document.getElementById('compareWarn'+key);
+  warnEl.style.display='none';
+  try{
+    compareState[key]=await analyseStravaActivity(activity);
+    updateComparison();
+  }catch(err){
+    warnEl.textContent=err.message||String(err);warnEl.style.display='block';
+  }
 }
 
 const compareState={A:null,B:null};
