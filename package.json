@@ -2,5 +2,10 @@
   "name": "cycling-lumpiness-index",
   "private": true,
   "version": "3.0.0",
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.0.0"
+  }
 }

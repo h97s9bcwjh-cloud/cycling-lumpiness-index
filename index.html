@@ -309,6 +309,18 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
   .beta-notice strong{color:var(--text)!important}
   .ip-note{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.5}
 
+
+  .rating-panel{margin-top:16px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);display:none}
+  .rating-panel h3{margin:0 0 6px;font-size:17px}
+  .rating-copy{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+  .rating-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .rating-input{width:110px;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:#0d1524;color:var(--text);font:inherit;font-size:18px;font-weight:700}
+  .rating-input:focus{outline:2px solid rgba(45,212,191,.35);border-color:var(--teal)}
+  .rating-submit{border:0;border-radius:9px;padding:10px 13px;background:var(--teal);color:#06272a;font:inherit;font-weight:800;cursor:pointer}
+  .rating-submit:disabled{opacity:.55;cursor:not-allowed}
+  .rating-status{margin-top:9px;font-size:12px;color:var(--muted);min-height:18px}
+  .rating-status.ok{color:#86efac}.rating-status.err{color:#fca5a5}
+
 </style>
   <meta name="description" content="Lumpiness Index (Cycling Lumpiness Index (CLI) v3.0): calculate how lumpy a cycling route is from a GPX elevation profile. Runs locally in your browser.">
   <meta name="theme-color" content="#17324d">
@@ -454,6 +466,19 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
         </div>
       </div>
 
+      <div class="rating-panel" id="ratingPanel">
+        <h3>Help improve CLI</h3>
+        <div class="rating-copy">
+          How lumpy would <strong>you</strong> rate this ride? Enter a score from <strong>0.00 to 10.00</strong>.
+          Your anonymous rating will be stored alongside the calculated CLI and used to help evaluate and improve the Cycling Lumpiness Index.
+        </div>
+        <div class="rating-row">
+          <input class="rating-input" id="riderRating" type="number" min="0" max="10" step="0.01" inputmode="decimal" placeholder="e.g. 6.75" aria-label="Your lumpiness rating from 0 to 10">
+          <button class="rating-submit" id="ratingSubmit" type="button">Submit rating</button>
+        </div>
+        <div class="rating-status" id="ratingStatus"></div>
+      </div>
+
       <div class="breakdown">
         <h3 style="margin:0 0 8px;color:var(--navy)">Technical breakdown</h3>
         <table>
@@ -597,6 +622,7 @@ border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f2f6f9);border:1px
 const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
 const warn = document.getElementById('warn');
+let currentAnalysis=null;
 
 const singleModeBtn=document.getElementById('singleModeBtn');
 const compareModeBtn=document.getElementById('compareModeBtn');
@@ -1006,6 +1032,8 @@ async function analyseGPXFile(file){
 
 
 function renderSingleAnalysis(a){
+  currentAnalysis=a;
+  resetRatingPanel();
   const score=a.result.cli;
   const [label,color,copy]=category(score);
 
@@ -1319,6 +1347,48 @@ document.getElementById('compareFileB').addEventListener('change',e=>{
   if(e.target.files[0]) loadCompare(e.target.files[0],'B');
 });
 
+
+async function rideFingerprint(a){
+  const enc=new TextEncoder();
+  const rounded=a.z.map(v=>Math.round(v*10)/10);
+  const canonical=`v3|25m|${a.grid.length}|${Math.round(a.total)}|`+rounded.join(',');
+  const digest=await crypto.subtle.digest('SHA-256',enc.encode(canonical));
+  return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function resetRatingPanel(){
+  const panel=document.getElementById('ratingPanel'),input=document.getElementById('riderRating'),
+        status=document.getElementById('ratingStatus'),btn=document.getElementById('ratingSubmit');
+  if(panel) panel.style.display='block';
+  if(input){input.value='';input.disabled=false;}
+  if(status){status.textContent='';status.className='rating-status';}
+  if(btn){btn.disabled=false;btn.textContent='Submit rating';}
+}
+async function submitRiderRating(){
+  const input=document.getElementById('riderRating'),btn=document.getElementById('ratingSubmit'),
+        status=document.getElementById('ratingStatus');
+  if(!currentAnalysis){status.textContent='Calculate a ride first.';status.className='rating-status err';return;}
+  const raw=String(input.value).trim(),rating=Number(raw);
+  if(!Number.isFinite(rating)||rating<0||rating>10){status.textContent='Please enter a score between 0.00 and 10.00.';status.className='rating-status err';return;}
+  if(!/^(?:10(?:\.0{1,2})?|[0-9](?:\.\d{1,2})?)$/.test(raw)){status.textContent='Please use no more than two decimal places.';status.className='rating-status err';return;}
+  btn.disabled=true;input.disabled=true;btn.textContent='Submitting…';status.textContent='';
+  try{
+    const fingerprint=await rideFingerprint(currentAnalysis),r=currentAnalysis.result;
+    const payload={
+      schema_version:1,rider_rating:Math.round(rating*100)/100,ride_fingerprint:fingerprint,cli_version:'3.0',
+      cli:Number(r.cli.toFixed(6)),p50:Number(r.P50.toFixed(6)),rshort:Number(r.Rshort.toFixed(6)),rlong:Number(r.Rlong.toFixed(6)),
+      distance_m:Math.round(currentAnalysis.total),elevation_gain_m:Math.round(currentAnalysis.elevationGain),
+      source:currentAnalysis.source||'GPX'
+    };
+    const res=await fetch('/.netlify/functions/rider-rating',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error||`Submission failed (${res.status})`);
+    status.textContent='Thank you — your rating has been recorded.';status.className='rating-status ok';btn.textContent='Submitted';
+  }catch(err){
+    status.textContent=err.message||String(err);status.className='rating-status err';btn.disabled=false;input.disabled=false;btn.textContent='Submit rating';
+  }
+}
+document.getElementById('ratingSubmit').addEventListener('click',submitRiderRating);
+
 // initial empty chart
 
 (function(){
@@ -1348,7 +1418,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   <p><strong>Cycling Lumpiness Index (CLI) v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to distinguish repeated changes in gradient and climbing/descending structure from simple elevation gain or steepness. A long steady climb can therefore have a low CLI, while a rolling sawtooth route can score highly.</p>
   <p>The calculation combines multi-scale gradient roughness with short/medium (roughly 250–500 m) and longer (roughly 2–4 km) climb–descent reversal structure. The current whole-ride formula was frozen before two blinded validation batches totalling 24 rides; against one experienced rider’s subjective ratings it achieved a mean absolute error of 0.73/10 and Spearman rank correlation of 0.941.</p>
   <p><strong>Ride summary:</strong> distance, minimum/maximum elevation and total elevation gain are calculated from the same distance-normalised elevation profile used by CLI. Elevation gain is the sum of positive elevation changes after 25 m spatial resampling.</p>
-  <p><strong>Privacy:</strong> GPX processing takes place in your browser. The calculator does not need to send the ride file to a server.</p>
+  <p><strong>Privacy:</strong> GPX processing takes place in your browser. The calculator does not need to send the ride file to a server. If you submit a rider rating, the site stores the rating together with derived CLI statistics and a one-way ride fingerprint; it does not store your GPX file, route coordinates, name, email address or Strava athlete ID.</p>
   <p><strong>Beta status:</strong> CLI v3.0 is experimental and remains subject to wider validation. It is not a navigation, safety or route-suitability tool.</p>
   <p><strong>Intellectual property:</strong> © 2026 Cycling Lumpiness Index. All rights reserved. The implementation, documentation and visual materials are made available for evaluation and rider feedback; no licence for reuse or commercial exploitation is granted.</p>
   <details>

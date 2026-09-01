@@ -61,3 +61,7 @@ The public site identifies CLI v3.0 as a beta/research metric and uses the anony
 `© 2026 Cycling Lumpiness Index. All rights reserved.`
 
 No personal name is displayed on the site.
+
+
+## Anonymous rider-rating feedback
+Ratings are stored in Netlify Blobs (`cli-rider-ratings`) with a one-way ride fingerprint and derived CLI values. Raw GPX files, coordinates, filenames, names, email addresses and Strava athlete IDs are not stored by this feature.
