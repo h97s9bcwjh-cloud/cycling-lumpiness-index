@@ -65,3 +65,58 @@ No personal name is displayed on the site.
 
 ## Anonymous rider-rating feedback
 Ratings are stored in Netlify Blobs (`cli-rider-ratings`) with a one-way ride fingerprint and derived CLI values. Raw GPX files, coordinates, filenames, names, email addresses and Strava athlete IDs are not stored by this feature.
+
+
+## Protected rider-rating export
+
+This build adds a private export endpoint for the anonymous validation dataset.
+
+### Netlify setup
+
+Add a new Production environment variable:
+
+`RATING_EXPORT_TOKEN`
+
+Use a long random value, for example generate one on macOS with:
+
+`openssl rand -hex 32`
+
+Mark it as a secret. A value is only required in Production unless you also want exports from preview deploys.
+
+After saving the environment variable, redeploy the site.
+
+### Export options
+
+Private helper page:
+
+`/admin/`
+
+Enter the export token there and download either CSV or JSON.
+
+Direct endpoints are also available:
+
+`/.netlify/functions/rider-ratings-export?format=csv`
+
+`/.netlify/functions/rider-ratings-export?format=json`
+
+For direct API use, send:
+
+`Authorization: Bearer YOUR_RATING_EXPORT_TOKEN`
+
+The token is never included in the public site source.
+
+### Exported fields
+
+- submitted_at
+- ride_fingerprint
+- rider_rating
+- cli_version
+- cli
+- p50
+- rshort
+- rlong
+- distance_m
+- elevation_gain_m
+- source
+
+This is intended to make the collected rider-feedback dataset straightforward to export for subsequent CLI validation and model-development analysis.

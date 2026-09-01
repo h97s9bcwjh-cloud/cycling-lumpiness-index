@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLI validation export</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;background:#0b1220;color:#e5edf5;max-width:720px;margin:50px auto;padding:20px}
+.card{background:#111827;border:1px solid #243247;border-radius:16px;padding:22px}
+input{width:100%;box-sizing:border-box;padding:11px;border-radius:9px;border:1px solid #334155;background:#0d1524;color:#e5edf5;margin:8px 0 14px}
+button{padding:10px 14px;margin-right:8px;border:0;border-radius:9px;font-weight:700;cursor:pointer}
+.primary{background:#2dd4bf;color:#06272a}.secondary{background:#26364d;color:#e5edf5}
+.small{color:#97a6ba;font-size:13px;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>CLI validation export</h1>
+<p class="small">Private admin utility. Enter the export token configured in Netlify, then download the anonymous rider-rating dataset.</p>
+<label for="token">Export token</label>
+<input id="token" type="password" autocomplete="off">
+<button class="primary" onclick="downloadData('csv')">Download CSV</button>
+<button class="secondary" onclick="downloadData('json')">Download JSON</button>
+<p id="status" class="small"></p>
+</div>
+<script>
+async function downloadData(format){
+  const token=document.getElementById('token').value.trim();
+  const status=document.getElementById('status');
+  if(!token){status.textContent='Enter the export token first.';return;}
+  status.textContent='Preparing export…';
+  const r=await fetch('/.netlify/functions/rider-ratings-export?format='+encodeURIComponent(format),{
+    headers:{authorization:'Bearer '+token}
+  });
+  if(!r.ok){
+    let msg='Export failed';
+    try{const j=await r.json();msg=j.error||msg;}catch(_){}
+    status.textContent=msg;return;
+  }
+  const blob=await r.blob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='cli-rider-ratings.'+format;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  status.textContent='Export downloaded.';
+}
+</script>
+</body>
+</html>
