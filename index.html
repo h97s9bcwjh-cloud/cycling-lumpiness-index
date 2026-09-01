@@ -1377,7 +1377,10 @@ async function submitRiderRating(){
       schema_version:1,rider_rating:Math.round(rating*100)/100,ride_fingerprint:fingerprint,cli_version:'3.0',
       cli:Number(r.cli.toFixed(6)),p50:Number(r.P50.toFixed(6)),rshort:Number(r.Rshort.toFixed(6)),rlong:Number(r.Rlong.toFixed(6)),
       distance_m:Math.round(currentAnalysis.total),elevation_gain_m:Math.round(currentAnalysis.elevationGain),
-      source:currentAnalysis.source||'GPX'
+      source:currentAnalysis.source||'GPX',
+      profile_version:'distance-elevation-25m-v1',
+      profile_spacing_m:25,
+      elevation_profile_m:currentAnalysis.z.map(v=>Math.round(v*10)/10)
     };
     const res=await fetch('/.netlify/functions/rider-rating',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json().catch(()=>({}));
@@ -1418,7 +1421,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   <p><strong>Cycling Lumpiness Index (CLI) v3.0</strong> is a candidate 0–10 measure of how “lumpy” a cycling route is. It is designed to distinguish repeated changes in gradient and climbing/descending structure from simple elevation gain or steepness. A long steady climb can therefore have a low CLI, while a rolling sawtooth route can score highly.</p>
   <p>The calculation combines multi-scale gradient roughness with short/medium (roughly 250–500 m) and longer (roughly 2–4 km) climb–descent reversal structure. The current whole-ride formula was frozen before two blinded validation batches totalling 24 rides; against one experienced rider’s subjective ratings it achieved a mean absolute error of 0.73/10 and Spearman rank correlation of 0.941.</p>
   <p><strong>Ride summary:</strong> distance, minimum/maximum elevation and total elevation gain are calculated from the same distance-normalised elevation profile used by CLI. Elevation gain is the sum of positive elevation changes after 25 m spatial resampling.</p>
-  <p><strong>Privacy:</strong> GPX processing takes place in your browser. The calculator does not need to send the ride file to a server. If you submit a rider rating, the site stores the rating together with derived CLI statistics and a one-way ride fingerprint; it does not store your GPX file, route coordinates, name, email address or Strava athlete ID.</p>
+  <p><strong>Privacy:</strong> GPX processing takes place in your browser. The calculator does not need to send the ride file to a server. If you submit a rider rating, the site stores the rating together with derived CLI statistics, a one-way ride fingerprint, and an anonymised 25 m distance–elevation profile. It does not store your GPX file, latitude/longitude coordinates, filename, name, email address or Strava athlete ID.</p>
   <p><strong>Beta status:</strong> CLI v3.0 is experimental and remains subject to wider validation. It is not a navigation, safety or route-suitability tool.</p>
   <p><strong>Intellectual property:</strong> © 2026 Cycling Lumpiness Index. All rights reserved. The implementation, documentation and visual materials are made available for evaluation and rider feedback; no licence for reuse or commercial exploitation is granted.</p>
   <details>

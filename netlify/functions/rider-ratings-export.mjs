@@ -67,12 +67,14 @@ export default async (req) => {
 
   const headers = [
     "submitted_at","ride_fingerprint","rider_rating","cli_version","cli",
-    "p50","rshort","rlong","distance_m","elevation_gain_m","source"
+    "p50","rshort","rlong","distance_m","elevation_gain_m","source",
+    "profile_version","profile_spacing_m","profile_points"
   ];
 
   const lines = [headers.join(",")];
   for (const r of records) {
-    lines.push(headers.map(h => csvEscape(r[h])).join(","));
+    const row={...r,profile_points:Array.isArray(r.elevation_profile_m)?r.elevation_profile_m.length:""};
+    lines.push(headers.map(h => csvEscape(row[h])).join(","));
   }
 
   return new Response(lines.join("\n"), {

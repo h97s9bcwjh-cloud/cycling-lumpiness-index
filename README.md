@@ -120,3 +120,25 @@ The token is never included in the public site source.
 - source
 
 This is intended to make the collected rider-feedback dataset straightforward to export for subsequent CLI validation and model-development analysis.
+
+
+## De novo development dataset
+
+Rider-rating submissions now also store an anonymised route representation:
+
+- `profile_version = "distance-elevation-25m-v1"`
+- `profile_spacing_m = 25`
+- `elevation_profile_m = [...]`
+
+The elevation profile is the same uniformly resampled 25 m series used as the input to CLI v3.0, rounded to 0.1 m.
+It preserves terrain shape while excluding latitude/longitude coordinates, raw GPX content, filenames, names,
+email addresses and Strava athlete IDs.
+
+This allows future model development to restart from the route elevation profile rather than being limited to the
+current v3.0 derived features.
+
+### Export behaviour
+
+- CSV export contains validation summary fields plus profile format metadata and number of profile points.
+- JSON export contains the complete records including `elevation_profile_m`, and is therefore the preferred format
+  for de novo model development.
